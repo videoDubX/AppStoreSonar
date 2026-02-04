@@ -469,6 +469,12 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="maxReviews">最大评论数</label>
+                <input type="number" id="maxReviews" placeholder="不限制" min="1" aria-label="最大评论数">
+                <small>留空或填 0 表示获取全部评论，填写数字则达到该数量后停止抓取</small>
+            </div>
+
             <button class="btn btn-primary" onclick="fetchSingleCountry()" id="fetchBtn">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -525,6 +531,12 @@
             <div class="form-group">
                 <label for="appIdAll">App ID *</label>
                 <input type="text" id="appIdAll" placeholder="例如: 6683289805" value="6683289805" aria-label="App ID">
+            </div>
+
+            <div class="form-group">
+                <label for="maxReviewsAll">最大评论数</label>
+                <input type="number" id="maxReviewsAll" placeholder="不限制" min="1" aria-label="最大评论数">
+                <small>留空或填 0 表示获取全部评论，填写数字则达到该数量后停止抓取</small>
             </div>
 
             <button class="btn btn-primary" onclick="fetchAllCountries()" id="fetchAllBtn">
@@ -636,7 +648,7 @@
 
         document.addEventListener('DOMContentLoaded', updateProxyStatus);
 
-        async function fetchReviews(appId, country, retryCount = 0) {
+        async function fetchReviews(appId, country, retryCount = 0, maxReviews = 0) {
             const initialUrl = `https://itunes.apple.com/${country}/rss/customerreviews/id=${appId}/xml`;
             let allReviews = [];
             let feedUrl = initialUrl;
@@ -645,6 +657,12 @@
 
             while (hasNext) {
                 hasNext = false;
+
+                // 检查是否已达到最大评论数
+                if (maxReviews > 0 && allReviews.length >= maxReviews) {
+                    console.log(`已达到最大评论数限制: ${maxReviews}`);
+                    break;
+                }
                 const proxy = CORS_PROXY();
                 const proxyUrl = proxy ? proxy + encodeURIComponent(feedUrl) : feedUrl;
 
@@ -675,6 +693,11 @@
                     console.log(`获取第 ${pageCount} 页，评论数: ${entries.length}`);
 
                     entries.forEach(entry => {
+                        // 如果已达到最大评论数，停止添加
+                        if (maxReviews > 0 && allReviews.length >= maxReviews) {
+                            return;
+                        }
+
                         const review = {
                             id: entry.querySelector('id')?.textContent || '',
                             title: entry.querySelector('title')?.textContent || '',
@@ -708,8 +731,8 @@
                         }
                     });
 
-                    // 如果有下一页链接，继续获取
-                    if (nextUrl) {
+                    // 如果有下一页链接且未达到最大评论数，继续获取
+                    if (nextUrl && !(maxReviews > 0 && allReviews.length >= maxReviews)) {
                         // 检查是否是真的下一页（URL 路径不同）
                         if (selfUrl && nextUrl !== selfUrl) {
                             try {
@@ -729,8 +752,8 @@
                         }
                     }
 
-                    // 如果没有更多评论，停止
-                    if (entries.length === 0) {
+                    // 如果没有更多评论或已达到最大数量，停止
+                    if (entries.length === 0 || (maxReviews > 0 && allReviews.length >= maxReviews)) {
                         hasNext = false;
                     }
 
@@ -757,6 +780,7 @@
         async function fetchSingleCountry() {
             const appId = document.getElementById('appId').value.trim();
             const country = document.getElementById('country').value;
+            const maxReviews = parseInt(document.getElementById('maxReviews').value) || 0;
 
             if (!appId) {
                 alert('请输入 App ID');
@@ -776,6 +800,11 @@
 
             addLog('开始抓取评论...');
             addLog(`App ID: ${appId}, 国家: ${country.toUpperCase()}`);
+            if (maxReviews > 0) {
+                addLog(`⚙️ 最大评论数限制: ${maxReviews}`);
+            } else {
+                addLog(`⚙️ 获取全部评论（无限制）`);
+            }
             document.getElementById('progressFill').textContent = '正在获取第 1 页...';
             document.getElementById('progressFill').style.width = '30%';
 
@@ -790,6 +819,12 @@
 
                     while (hasNext) {
                         hasNext = false;
+
+                        // 检查是否已达到最大评论数
+                        if (maxReviews > 0 && allReviews.length >= maxReviews) {
+                            addLog(`⏹️ 已达到最大评论数限制: ${maxReviews}`);
+                            break;
+                        }
                         const proxy = CORS_PROXY();
                         const proxyUrl = proxy ? proxy + encodeURIComponent(feedUrl) : feedUrl;
 
@@ -817,6 +852,11 @@
                             document.getElementById('progressFill').style.width = `${Math.min(30 + pageCount * 10, 90)}%`;
 
                             entries.forEach(entry => {
+                                // 如果已达到最大评论数，停止添加
+                                if (maxReviews > 0 && allReviews.length >= maxReviews) {
+                                    return;
+                                }
+
                                 allReviews.push({
                                     id: entry.querySelector('id')?.textContent || '',
                                     title: entry.querySelector('title')?.textContent || '',
@@ -843,7 +883,7 @@
                                 if (rel === 'self') selfUrl = href;
                             });
 
-                            if (nextUrl && selfUrl && nextUrl !== selfUrl) {
+                            if (nextUrl && selfUrl && nextUrl !== selfUrl && !(maxReviews > 0 && allReviews.length >= maxReviews)) {
                                 try {
                                     const nextPath = new URL(nextUrl).pathname;
                                     const selfPath = new URL(selfUrl).pathname;
@@ -857,7 +897,7 @@
                                 }
                             }
 
-                            if (entries.length === 0) hasNext = false;
+                            if (entries.length === 0 || (maxReviews > 0 && allReviews.length >= maxReviews)) hasNext = false;
 
                         } catch (error) {
                             console.error(`Error: ${error}`);
@@ -900,6 +940,7 @@
 
         async function fetchAllCountries() {
             const appId = document.getElementById('appIdAll').value.trim();
+            const maxReviewsAll = parseInt(document.getElementById('maxReviewsAll').value) || 0;
 
             if (!appId) {
                 alert('请输入 App ID');
@@ -920,8 +961,19 @@
             allCountryReviews = [];
 
             addLogAll('开始全球抓取...');
+            if (maxReviewsAll > 0) {
+                addLogAll(`⚙️ 最大评论数限制: ${maxReviewsAll}`);
+            } else {
+                addLogAll(`⚙️ 获取全部评论（无限制）`);
+            }
 
             for (let i = 0; i < COUNTRIES.length; i++) {
+                // 检查是否已达到最大评论数
+                if (maxReviewsAll > 0 && allCountryReviews.length >= maxReviewsAll) {
+                    addLogAll(`⏹️ 已达到最大评论数限制: ${maxReviewsAll}，停止抓取`);
+                    break;
+                }
+
                 const country = COUNTRIES[i];
                 const percent = Math.round((i / COUNTRIES.length) * 100);
 
@@ -930,7 +982,10 @@
 
                 addLogAll(`[${i + 1}/${COUNTRIES.length}] 正在抓取 ${country.toUpperCase()}...`);
 
-                const reviews = await fetchReviews(appId, country);
+                // 计算该国家还可以抓取多少评论
+                const remainingQuota = maxReviewsAll > 0 ? maxReviewsAll - allCountryReviews.length : 0;
+                const reviews = await fetchReviews(appId, country, 0, remainingQuota);
+
                 if (reviews.length > 0) {
                     allCountryReviews.push(...reviews);
                     addLogAll(`✅ ${country.toUpperCase()}: ${reviews.length} 条评论（累计: ${allCountryReviews.length}）`);

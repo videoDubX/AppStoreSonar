@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Store 评论抓取器</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #F8FAFC;
+            color: #1E3A8A;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
+            color: white;
+            padding: 48px 32px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 24px rgba(30, 64, 175, 0.15);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: clamp(24px, 5vw, 40px);
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+
+        .header p {
+            font-size: clamp(14px, 2vw, 18px);
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: white;
+            padding: 8px;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
+        }
+
+        .tab {
+            padding: 16px 24px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 200ms ease;
+            border-radius: 8px;
+            color: #64748B;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid transparent;
+        }
+
+        .tab:hover {
+            background: #F1F5F9;
+            color: #1E40AF;
+        }
+
+        .tab.active {
+            background: #1E40AF;
+            color: white;
+            border-color: #1E40AF;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 32px;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 15px;
+        }
+
+        .alert-info {
+            background: #EFF6FF;
+            border: 2px solid #DBEAFE;
+            color: #1E40AF;
+        }
+
+        .alert-warning {
+            background: #FEF3C7;
+            border: 2px solid #FDE68A;
+            color: #92400E;
+        }
+
+        .alert svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .alert-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .alert-actions span {
+            flex: 1;
+        }
+
+        /* Form Group */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1E40AF;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            min-height: 44px;
+            padding: 12px 16px;
+            border: 2px solid #E2E8F0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            color: #1E3A8A;
+            transition: all 200ms ease;
+        }
+
+        .form-group input:hover,
+        .form-group select:hover {
+            border-color: #3B82F6;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #1E40AF;
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 6px;
+            color: #64748B;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* Button */
+        .btn {
+            min-height: 44px;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 200ms ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: #1E40AF;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #1E3A8A;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #64748B;
+            color: white;
+            width: auto;
+            padding: 8px 16px;
+            min-height: 36px;
+            font-size: 14px;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        /* Progress */
+        .progress {
+            margin: 24px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 40px;
+            background: #E2E8F0;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1E40AF 0%, #3B82F6 100%);
+            transition: width 300ms ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* Results */
+        .results {
+            margin-top: 32px;
+            display: none;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: #EFF6FF;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #DBEAFE;
+            transition: all 200ms ease;
+        }
+
+        .stat-card:hover {
+            background: #DBEAFE;
+            border-color: #3B82F6;
+            transform: translateY(-2px);
+        }
+
+        .stat-value {
+            font-size: clamp(24px, 4vw, 32px);
+            font-weight: 700;
+            color: #1E40AF;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 500;
+        }
+
+        /* Log */
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #F8FAFC;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 24px;
+            display: none;
+            border: 2px solid #E2E8F0;
+        }
+
+        .log::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log::-webkit-scrollbar-track {
+            background: #F1F5F9;
+        }
+
+        .log::-webkit-scrollbar-thumb {
+            background: #3B82F6;
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 4px 0;
+            line-height: 1.5;
+        }
+
+        .log-entry::before {
+            content: '› ';
+            color: #3B82F6;
+            font-weight: bold;
+        }
+
+        /* Footer */
+        .footer {
+            background: white;
+            padding: 24px;
+            text-align: center;
+            color: #64748B;
+            font-size: 14px;
+            border-radius: 12px;
+            margin-top: 32px;
+            box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
+        }
+
+        .footer p {
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .header {
+                padding: 32px 24px;
+            }
+
+            .tabs {
+                grid-template-columns: 1fr;
+            }
+
+            .tab-content {
+                padding: 24px;
+            }
+
+            .alert-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 375px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 App Store 评论抓取器</h1>
+            <p>在线版 - 无需安装，浏览器直接使用</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('single')">单个国家</div>
+            <div class="tab" onclick="switchTab('all')">全球抓取</div>
+        </div>
+
+        <!-- 单个国家抓取 -->
+        <div id="single-tab" class="tab-content active">
+            <div class="alert alert-info">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>输入 App ID 和国家代码，点击"开始抓取"即可获取评论数据</span>
+            </div>
+
+            <div class="alert alert-warning alert-actions">
+                <span>当前代理: <strong id="currentProxy">corsproxy.io</strong></span>
+                <button class="btn btn-secondary" onclick="switchProxy()">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    切换代理
+                </button>
+            </div>
+
+            <div class="form-group">
+                <label for="appId">App ID *</label>
+                <input type="text" id="appId" placeholder="例如: 6683289805" value="6683289805" aria-label="App ID">
+                <small>从 App Store URL 中获取，例如：https://apps.apple.com/us/app/xxx/id<strong>6683289805</strong></small>
+            </div>
+
+            <div class="form-group">
+                <label for="country">国家代码 *</label>
+                <select id="country" aria-label="国家代码">
+                    <option value="us">🇺🇸 美国 (us)</option>
+                    <option value="cn">🇨🇳 中国 (cn)</option>
+                    <option value="jp">🇯🇵 日本 (jp)</option>
+                    <option value="kr">🇰🇷 韩国 (kr)</option>
+                    <option value="gb">🇬🇧 英国 (gb)</option>
+                    <option value="ca">🇨🇦 加拿大 (ca)</option>
+                    <option value="au">🇦🇺 澳大利亚 (au)</option>
+                    <option value="de">🇩🇪 德国 (de)</option>
+                    <option value="fr">🇫🇷 法国 (fr)</option>
+                    <option value="it">🇮🇹 意大利 (it)</option>
+                    <option value="es">🇪🇸 西班牙 (es)</option>
+                    <option value="br">🇧🇷 巴西 (br)</option>
+                    <option value="mx">🇲🇽 墨西哥 (mx)</option>
+                    <option value="in">🇮🇳 印度 (in)</option>
+                    <option value="sg">🇸🇬 新加坡 (sg)</option>
+                    <option value="hk">🇭🇰 香港 (hk)</option>
+                    <option value="tw">🇹🇼 台湾 (tw)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" onclick="fetchSingleCountry()" id="fetchBtn">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                开始抓取
+            </button>
+
+            <div class="progress" id="progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%">准备中...</div>
+                </div>
+            </div>
+
+            <div class="results" id="results">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="reviewCount">0</div>
+                        <div class="stat-label">评论总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avgRating">0.0</div>
+                        <div class="stat-label">平均评分</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="fiveStarCount">0</div>
+                        <div class="stat-label">五星评论</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="oneStarCount">0</div>
+                        <div class="stat-label">一星评论</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="downloadResults()">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    下载 JSON 文件
+                </button>
+            </div>
+
+            <div class="log" id="log"></div>
+        </div>
+
+        <!-- 全球抓取 -->
+        <div id="all-tab" class="tab-content">
+            <div class="alert alert-warning">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <span>全球抓取需要较长时间（约 1-3 分钟），请耐心等待</span>
+            </div>
+
+            <div class="form-group">
+                <label for="appIdAll">App ID *</label>
+                <input type="text" id="appIdAll" placeholder="例如: 6683289805" value="6683289805" aria-label="App ID">
+            </div>
+
+            <button class="btn btn-primary" onclick="fetchAllCountries()" id="fetchAllBtn">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                开始全球抓取
+            </button>
+
+            <div class="progress" id="progressAll">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillAll" style="width: 0%">准备中...</div>
+                </div>
+            </div>
+
+            <div class="results" id="resultsAll">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalReviews">0</div>
+                        <div class="stat-label">总评论数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="countriesCount">0</div>
+                        <div class="stat-label">国家数量</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="globalAvgRating">0.0</div>
+                        <div class="stat-label">全球平均评分</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="downloadAllResults()">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    下载全球评论 JSON
+                </button>
+            </div>
+
+            <div class="log" id="logAll"></div>
+        </div>
+
+        <div class="footer">
+            <p>基于 Apple Store RSS Feed API | 数据仅供参考</p>
+            <p>⚠️ 由于浏览器跨域限制，可能需要使用 CORS 代理</p>
+        </div>
+    </div>
+
+    <script>
+        let currentReviews = [];
+        let allCountryReviews = [];
+
+        const CORS_PROXIES = [
+            'https://corsproxy.io/?',
+            'https://api.codetabs.com/v1/proxy?quest=',
+            'https://api.allorigins.win/raw?url=',
+            '',
+        ];
+
+        let currentProxyIndex = 0;
+        const CORS_PROXY = () => CORS_PROXIES[currentProxyIndex];
+
+        const COUNTRIES = [
+            'us', 'gb', 'ca', 'au', 'nz',
+            'cn', 'hk', 'tw', 'mo',
+            'jp', 'kr',
+            'de', 'fr', 'it', 'es', 'pt', 'nl', 'be', 'ch', 'at', 'se', 'no', 'dk', 'fi',
+            'ru', 'pl', 'cz', 'gr', 'hu', 'ro',
+            'mx', 'br', 'ar', 'cl', 'co', 've',
+            'in', 'sg', 'my', 'th', 'id', 'ph', 'vn',
+            'ae', 'sa', 'il', 'tr', 'eg',
+            'za', 'ng', 'ke'
+        ];
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'single') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('single-tab').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('all-tab').classList.add('active');
+            }
+        }
+
+        function switchProxy() {
+            currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+            updateProxyStatus();
+            alert(`已切换到代理 ${currentProxyIndex + 1}/${CORS_PROXIES.length}\n${getProxyName()}\n\n请重新尝试抓取`);
+        }
+
+        function getProxyName() {
+            const proxy = CORS_PROXY();
+            if (!proxy) return '直接访问（无代理）';
+            if (proxy.includes('corsproxy.io')) return 'corsproxy.io';
+            if (proxy.includes('codetabs.com')) return 'codetabs.com';
+            if (proxy.includes('allorigins.win')) return 'allorigins.win';
+            return proxy;
+        }
+
+        function updateProxyStatus() {
+            const statusEl = document.getElementById('currentProxy');
+            if (statusEl) {
+                statusEl.textContent = getProxyName();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', updateProxyStatus);
+
+        async function fetchReviews(appId, country, retryCount = 0) {
+            const url = `https://itunes.apple.com/${country}/rss/customerreviews/id=${appId}/xml`;
+            const proxy = CORS_PROXY();
+            const proxyUrl = proxy ? proxy + encodeURIComponent(url) : url;
+
+            try {
+                const response = await fetch(proxyUrl, {
+                    headers: {
+                        'Accept': 'application/xml, text/xml, */*',
+                    },
+                    mode: 'cors',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const text = await response.text();
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(text, 'text/xml');
+
+                const parseError = xml.querySelector('parsererror');
+                if (parseError) {
+                    throw new Error('XML 解析失败');
+                }
+
+                const entries = xml.querySelectorAll('entry');
+                const reviews = [];
+
+                entries.forEach(entry => {
+                    const review = {
+                        id: entry.querySelector('id')?.textContent || '',
+                        title: entry.querySelector('title')?.textContent || '',
+                        content: entry.querySelector('content[type="text"]')?.textContent || '',
+                        rating: parseInt(entry.querySelector('im\\:rating, rating')?.textContent || '0'),
+                        version: entry.querySelector('im\\:version, version')?.textContent || '',
+                        date: entry.querySelector('updated')?.textContent || '',
+                        author_name: entry.querySelector('author name')?.textContent || '',
+                        author_link: entry.querySelector('author uri')?.textContent || '',
+                        country: country,
+                        vote_count: parseInt(entry.querySelector('im\\:voteCount, voteCount')?.textContent || '0'),
+                        vote_sum: parseInt(entry.querySelector('im\\:voteSum, voteSum')?.textContent || '0')
+                    };
+                    reviews.push(review);
+                });
+
+                return reviews;
+            } catch (error) {
+                console.error(`Error fetching ${country} with proxy ${currentProxyIndex}:`, error);
+
+                if (retryCount < CORS_PROXIES.length - 1) {
+                    currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+                    console.log(`尝试切换到代理 ${currentProxyIndex}: ${CORS_PROXY() || '直接访问'}`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return fetchReviews(appId, country, retryCount + 1);
+                }
+
+                return [];
+            }
+        }
+
+        async function fetchSingleCountry() {
+            const appId = document.getElementById('appId').value.trim();
+            const country = document.getElementById('country').value;
+
+            if (!appId) {
+                alert('请输入 App ID');
+                return;
+            }
+
+            const btn = document.getElementById('fetchBtn');
+            const progress = document.getElementById('progress');
+            const results = document.getElementById('results');
+            const log = document.getElementById('log');
+
+            btn.disabled = true;
+            progress.style.display = 'block';
+            results.style.display = 'none';
+            log.style.display = 'block';
+            log.innerHTML = '';
+
+            addLog('开始抓取评论...');
+            document.getElementById('progressFill').textContent = '正在获取数据...';
+            document.getElementById('progressFill').style.width = '50%';
+
+            try {
+                const reviews = await fetchReviews(appId, country);
+                currentReviews = reviews;
+
+                if (reviews.length === 0) {
+                    addLog('❌ 未找到评论或请求失败');
+                    alert('未找到评论。可能原因：\n1. App ID 不正确\n2. 该国家没有评论\n3. CORS 代理失败（请刷新重试）');
+                } else {
+                    addLog(`✅ 成功获取 ${reviews.length} 条评论`);
+                    displayResults(reviews);
+                    results.style.display = 'block';
+                }
+            } catch (error) {
+                addLog(`❌ 错误: ${error.message}`);
+                alert('抓取失败：' + error.message);
+            } finally {
+                btn.disabled = false;
+                document.getElementById('progressFill').textContent = '完成';
+                document.getElementById('progressFill').style.width = '100%';
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                }, 1000);
+            }
+        }
+
+        async function fetchAllCountries() {
+            const appId = document.getElementById('appIdAll').value.trim();
+
+            if (!appId) {
+                alert('请输入 App ID');
+                return;
+            }
+
+            const btn = document.getElementById('fetchAllBtn');
+            const progress = document.getElementById('progressAll');
+            const results = document.getElementById('resultsAll');
+            const log = document.getElementById('logAll');
+
+            btn.disabled = true;
+            progress.style.display = 'block';
+            results.style.display = 'none';
+            log.style.display = 'block';
+            log.innerHTML = '';
+
+            allCountryReviews = [];
+
+            addLogAll('开始全球抓取...');
+
+            for (let i = 0; i < COUNTRIES.length; i++) {
+                const country = COUNTRIES[i];
+                const percent = Math.round((i / COUNTRIES.length) * 100);
+
+                document.getElementById('progressFillAll').textContent = `${country.toUpperCase()} (${i + 1}/${COUNTRIES.length})`;
+                document.getElementById('progressFillAll').style.width = `${percent}%`;
+
+                addLogAll(`[${i + 1}/${COUNTRIES.length}] 正在抓取 ${country.toUpperCase()}...`);
+
+                const reviews = await fetchReviews(appId, country);
+                if (reviews.length > 0) {
+                    allCountryReviews.push(...reviews);
+                    addLogAll(`✅ ${country.toUpperCase()}: ${reviews.length} 条评论`);
+                } else {
+                    addLogAll(`⚪ ${country.toUpperCase()}: 无评论`);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            document.getElementById('progressFillAll').textContent = '完成！';
+            document.getElementById('progressFillAll').style.width = '100%';
+
+            addLogAll(`\n✅ 全球抓取完成！共 ${allCountryReviews.length} 条评论`);
+
+            if (allCountryReviews.length > 0) {
+                displayAllResults(allCountryReviews);
+                results.style.display = 'block';
+            }
+
+            btn.disabled = false;
+            setTimeout(() => {
+                progress.style.display = 'none';
+            }, 2000);
+        }
+
+        function displayResults(reviews) {
+            document.getElementById('reviewCount').textContent = reviews.length;
+
+            const ratings = reviews.map(r => r.rating);
+            const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+            document.getElementById('avgRating').textContent = avgRating.toFixed(2) + ' ★';
+
+            const fiveStars = reviews.filter(r => r.rating === 5).length;
+            const oneStars = reviews.filter(r => r.rating === 1).length;
+            document.getElementById('fiveStarCount').textContent = fiveStars;
+            document.getElementById('oneStarCount').textContent = oneStars;
+        }
+
+        function displayAllResults(reviews) {
+            document.getElementById('totalReviews').textContent = reviews.length;
+
+            const countries = [...new Set(reviews.map(r => r.country))];
+            document.getElementById('countriesCount').textContent = countries.length;
+
+            const ratings = reviews.map(r => r.rating);
+            const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+            document.getElementById('globalAvgRating').textContent = avgRating.toFixed(2) + ' ★';
+        }
+
+        function downloadResults() {
+            if (currentReviews.length === 0) {
+                alert('没有数据可下载');
+                return;
+            }
+
+            const appId = document.getElementById('appId').value;
+            const country = document.getElementById('country').value;
+            const filename = `reviews_${appId}_${country}.json`;
+
+            downloadJSON(currentReviews, filename);
+        }
+
+        function downloadAllResults() {
+            if (allCountryReviews.length === 0) {
+                alert('没有数据可下载');
+                return;
+            }
+
+            const appId = document.getElementById('appIdAll').value;
+            const filename = `reviews_${appId}_all_countries.json`;
+
+            downloadJSON(allCountryReviews, filename);
+        }
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function addLogAll(message) {
+            const log = document.getElementById('logAll');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+    </script>
+</body>
+</html>

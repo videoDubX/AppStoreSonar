@@ -144,6 +144,29 @@
             box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
         }
 
+        .filter-group input[type="number"] {
+            width: 100%;
+            min-height: 44px;
+            padding: 12px 16px;
+            border: 2px solid #E2E8F0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            color: #1E3A8A;
+            transition: all 200ms ease;
+        }
+
+        .filter-group input[type="number"]:hover {
+            border-color: #3B82F6;
+        }
+
+        .filter-group input[type="number"]:focus {
+            outline: none;
+            border-color: #1E40AF;
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+        }
+
         /* Actions */
         .actions {
             display: flex;
@@ -583,6 +606,11 @@
                         <option value="asc">最早在前 ↑</option>
                     </select>
                 </div>
+
+                <div class="filter-group">
+                    <label for="minLikes">最小点赞数</label>
+                    <input type="number" id="minLikes" min="0" value="0" aria-label="最小点赞数">
+                </div>
             </div>
 
             <div class="actions">
@@ -695,11 +723,13 @@
             const version = document.getElementById('versionFilter').value;
             const country = document.getElementById('countryFilter').value;
             const sortOrder = document.getElementById('sortOrder').value;
+            const minLikes = parseInt(document.getElementById('minLikes').value) || 0;
 
             filteredReviews = allReviews.filter(review => {
                 if (rating && review.rating != rating) return false;
                 if (version && review.version != version) return false;
                 if (country && review.country != country) return false;
+                if ((review.vote_count || 0) < minLikes) return false;
                 return true;
             });
 
@@ -782,6 +812,7 @@
             document.getElementById('versionFilter').value = '';
             document.getElementById('countryFilter').value = '';
             document.getElementById('sortOrder').value = 'desc';
+            document.getElementById('minLikes').value = '0';
             applyFilters();
         }
 

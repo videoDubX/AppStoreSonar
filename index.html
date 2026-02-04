@@ -636,64 +636,121 @@
         document.addEventListener('DOMContentLoaded', updateProxyStatus);
 
         async function fetchReviews(appId, country, retryCount = 0) {
-            const url = `https://itunes.apple.com/${country}/rss/customerreviews/id=${appId}/xml`;
-            const proxy = CORS_PROXY();
-            const proxyUrl = proxy ? proxy + encodeURIComponent(url) : url;
+            const initialUrl = `https://itunes.apple.com/${country}/rss/customerreviews/id=${appId}/xml`;
+            let allReviews = [];
+            let feedUrl = initialUrl;
+            let hasNext = true;
+            let pageCount = 0;
 
-            try {
-                const response = await fetch(proxyUrl, {
-                    headers: {
-                        'Accept': 'application/xml, text/xml, */*',
-                    },
-                    mode: 'cors',
-                });
+            while (hasNext) {
+                hasNext = false;
+                const proxy = CORS_PROXY();
+                const proxyUrl = proxy ? proxy + encodeURIComponent(feedUrl) : feedUrl;
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                try {
+                    const response = await fetch(proxyUrl, {
+                        headers: {
+                            'Accept': 'application/xml, text/xml, */*',
+                        },
+                        mode: 'cors',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const text = await response.text();
+                    const parser = new DOMParser();
+                    const xml = parser.parseFromString(text, 'text/xml');
+
+                    const parseError = xml.querySelector('parsererror');
+                    if (parseError) {
+                        throw new Error('XML 解析失败');
+                    }
+
+                    // 获取当前页的评论
+                    const entries = xml.querySelectorAll('entry');
+                    pageCount++;
+                    console.log(`获取第 ${pageCount} 页，评论数: ${entries.length}`);
+
+                    entries.forEach(entry => {
+                        const review = {
+                            id: entry.querySelector('id')?.textContent || '',
+                            title: entry.querySelector('title')?.textContent || '',
+                            content: entry.querySelector('content[type="text"]')?.textContent || '',
+                            rating: parseInt(entry.querySelector('im\\:rating, rating')?.textContent || '0'),
+                            version: entry.querySelector('im\\:version, version')?.textContent || '',
+                            date: entry.querySelector('updated')?.textContent || '',
+                            author_name: entry.querySelector('author name')?.textContent || '',
+                            author_link: entry.querySelector('author uri')?.textContent || '',
+                            country: country,
+                            vote_count: parseInt(entry.querySelector('im\\:voteCount, voteCount')?.textContent || '0'),
+                            vote_sum: parseInt(entry.querySelector('im\\:voteSum, voteSum')?.textContent || '0')
+                        };
+                        allReviews.push(review);
+                    });
+
+                    // 检查是否有下一页
+                    const links = xml.querySelectorAll('feed > link');
+                    let nextUrl = null;
+                    let selfUrl = null;
+
+                    links.forEach(link => {
+                        const rel = link.getAttribute('rel');
+                        const href = link.getAttribute('href');
+
+                        if (rel === 'next') {
+                            nextUrl = href;
+                        }
+                        if (rel === 'self') {
+                            selfUrl = href;
+                        }
+                    });
+
+                    // 如果有下一页链接，继续获取
+                    if (nextUrl) {
+                        // 检查是否是真的下一页（URL 路径不同）
+                        if (selfUrl && nextUrl !== selfUrl) {
+                            try {
+                                const nextPath = new URL(nextUrl).pathname;
+                                const selfPath = new URL(selfUrl).pathname;
+
+                                if (nextPath !== selfPath) {
+                                    feedUrl = nextUrl;
+                                    hasNext = true;
+                                    // 小延迟避免请求过快
+                                    await new Promise(resolve => setTimeout(resolve, 300));
+                                }
+                            } catch (e) {
+                                // URL 解析失败，停止分页
+                                console.log('URL 解析失败，停止分页');
+                            }
+                        }
+                    }
+
+                    // 如果没有更多评论，停止
+                    if (entries.length === 0) {
+                        hasNext = false;
+                    }
+
+                } catch (error) {
+                    console.error(`Error fetching ${country} page ${pageCount} with proxy ${currentProxyIndex}:`, error);
+
+                    // 如果是第一页就失败，尝试切换代理
+                    if (allReviews.length === 0 && retryCount < CORS_PROXIES.length - 1) {
+                        currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+                        console.log(`尝试切换到代理 ${currentProxyIndex}: ${CORS_PROXY() || '直接访问'}`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        return fetchReviews(appId, country, retryCount + 1);
+                    }
+
+                    // 如果不是第一页失败，返回已获取的评论
+                    hasNext = false;
                 }
-
-                const text = await response.text();
-                const parser = new DOMParser();
-                const xml = parser.parseFromString(text, 'text/xml');
-
-                const parseError = xml.querySelector('parsererror');
-                if (parseError) {
-                    throw new Error('XML 解析失败');
-                }
-
-                const entries = xml.querySelectorAll('entry');
-                const reviews = [];
-
-                entries.forEach(entry => {
-                    const review = {
-                        id: entry.querySelector('id')?.textContent || '',
-                        title: entry.querySelector('title')?.textContent || '',
-                        content: entry.querySelector('content[type="text"]')?.textContent || '',
-                        rating: parseInt(entry.querySelector('im\\:rating, rating')?.textContent || '0'),
-                        version: entry.querySelector('im\\:version, version')?.textContent || '',
-                        date: entry.querySelector('updated')?.textContent || '',
-                        author_name: entry.querySelector('author name')?.textContent || '',
-                        author_link: entry.querySelector('author uri')?.textContent || '',
-                        country: country,
-                        vote_count: parseInt(entry.querySelector('im\\:voteCount, voteCount')?.textContent || '0'),
-                        vote_sum: parseInt(entry.querySelector('im\\:voteSum, voteSum')?.textContent || '0')
-                    };
-                    reviews.push(review);
-                });
-
-                return reviews;
-            } catch (error) {
-                console.error(`Error fetching ${country} with proxy ${currentProxyIndex}:`, error);
-
-                if (retryCount < CORS_PROXIES.length - 1) {
-                    currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
-                    console.log(`尝试切换到代理 ${currentProxyIndex}: ${CORS_PROXY() || '直接访问'}`);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    return fetchReviews(appId, country, retryCount + 1);
-                }
-
-                return [];
             }
+
+            console.log(`总共获取 ${pageCount} 页，${allReviews.length} 条评论`);
+            return allReviews;
         }
 
         async function fetchSingleCountry() {
@@ -717,18 +774,113 @@
             log.innerHTML = '';
 
             addLog('开始抓取评论...');
-            document.getElementById('progressFill').textContent = '正在获取数据...';
-            document.getElementById('progressFill').style.width = '50%';
+            addLog(`App ID: ${appId}, 国家: ${country.toUpperCase()}`);
+            document.getElementById('progressFill').textContent = '正在获取第 1 页...';
+            document.getElementById('progressFill').style.width = '30%';
 
             try {
-                const reviews = await fetchReviews(appId, country);
+                // 创建一个包装函数来跟踪进度
+                const fetchWithProgress = async (appId, country, retryCount = 0) => {
+                    const initialUrl = `https://itunes.apple.com/${country}/rss/customerreviews/id=${appId}/xml`;
+                    let allReviews = [];
+                    let feedUrl = initialUrl;
+                    let hasNext = true;
+                    let pageCount = 0;
+
+                    while (hasNext) {
+                        hasNext = false;
+                        const proxy = CORS_PROXY();
+                        const proxyUrl = proxy ? proxy + encodeURIComponent(feedUrl) : feedUrl;
+
+                        try {
+                            const response = await fetch(proxyUrl, {
+                                headers: { 'Accept': 'application/xml, text/xml, */*' },
+                                mode: 'cors',
+                            });
+
+                            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                            const text = await response.text();
+                            const parser = new DOMParser();
+                            const xml = parser.parseFromString(text, 'text/xml');
+
+                            const parseError = xml.querySelector('parsererror');
+                            if (parseError) throw new Error('XML 解析失败');
+
+                            const entries = xml.querySelectorAll('entry');
+                            pageCount++;
+
+                            // 更新进度
+                            addLog(`📄 获取第 ${pageCount} 页，本页 ${entries.length} 条评论`);
+                            document.getElementById('progressFill').textContent = `第 ${pageCount} 页 (${allReviews.length + entries.length} 条)`;
+                            document.getElementById('progressFill').style.width = `${Math.min(30 + pageCount * 10, 90)}%`;
+
+                            entries.forEach(entry => {
+                                allReviews.push({
+                                    id: entry.querySelector('id')?.textContent || '',
+                                    title: entry.querySelector('title')?.textContent || '',
+                                    content: entry.querySelector('content[type="text"]')?.textContent || '',
+                                    rating: parseInt(entry.querySelector('im\\:rating, rating')?.textContent || '0'),
+                                    version: entry.querySelector('im\\:version, version')?.textContent || '',
+                                    date: entry.querySelector('updated')?.textContent || '',
+                                    author_name: entry.querySelector('author name')?.textContent || '',
+                                    author_link: entry.querySelector('author uri')?.textContent || '',
+                                    country: country,
+                                    vote_count: parseInt(entry.querySelector('im\\:voteCount, voteCount')?.textContent || '0'),
+                                    vote_sum: parseInt(entry.querySelector('im\\:voteSum, voteSum')?.textContent || '0')
+                                });
+                            });
+
+                            const links = xml.querySelectorAll('feed > link');
+                            let nextUrl = null;
+                            let selfUrl = null;
+
+                            links.forEach(link => {
+                                const rel = link.getAttribute('rel');
+                                const href = link.getAttribute('href');
+                                if (rel === 'next') nextUrl = href;
+                                if (rel === 'self') selfUrl = href;
+                            });
+
+                            if (nextUrl && selfUrl && nextUrl !== selfUrl) {
+                                try {
+                                    const nextPath = new URL(nextUrl).pathname;
+                                    const selfPath = new URL(selfUrl).pathname;
+                                    if (nextPath !== selfPath) {
+                                        feedUrl = nextUrl;
+                                        hasNext = true;
+                                        await new Promise(resolve => setTimeout(resolve, 300));
+                                    }
+                                } catch (e) {
+                                    console.log('URL 解析失败');
+                                }
+                            }
+
+                            if (entries.length === 0) hasNext = false;
+
+                        } catch (error) {
+                            console.error(`Error: ${error}`);
+                            if (allReviews.length === 0 && retryCount < CORS_PROXIES.length - 1) {
+                                currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+                                addLog(`⚠️ 切换代理: ${getProxyName()}`);
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                return fetchWithProgress(appId, country, retryCount + 1);
+                            }
+                            hasNext = false;
+                        }
+                    }
+
+                    addLog(`✅ 完成！共 ${pageCount} 页，${allReviews.length} 条评论`);
+                    return allReviews;
+                };
+
+                const reviews = await fetchWithProgress(appId, country);
                 currentReviews = reviews;
 
                 if (reviews.length === 0) {
                     addLog('❌ 未找到评论或请求失败');
                     alert('未找到评论。可能原因：\n1. App ID 不正确\n2. 该国家没有评论\n3. CORS 代理失败（请刷新重试）');
                 } else {
-                    addLog(`✅ 成功获取 ${reviews.length} 条评论`);
                     displayResults(reviews);
                     results.style.display = 'block';
                 }
@@ -741,7 +893,7 @@
                 document.getElementById('progressFill').style.width = '100%';
                 setTimeout(() => {
                     progress.style.display = 'none';
-                }, 1000);
+                }, 2000);
             }
         }
 
@@ -780,11 +932,12 @@
                 const reviews = await fetchReviews(appId, country);
                 if (reviews.length > 0) {
                     allCountryReviews.push(...reviews);
-                    addLogAll(`✅ ${country.toUpperCase()}: ${reviews.length} 条评论`);
+                    addLogAll(`✅ ${country.toUpperCase()}: ${reviews.length} 条评论（累计: ${allCountryReviews.length}）`);
                 } else {
                     addLogAll(`⚪ ${country.toUpperCase()}: 无评论`);
                 }
 
+                // 每个国家之间增加延迟
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
 
